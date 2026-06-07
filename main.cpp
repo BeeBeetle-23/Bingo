@@ -11,7 +11,7 @@ int main(){
     initMagicTables();
     Zobrist::init();
     Board board;
-    board.Parse_FEN("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
+    board.Parse_FEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     findBestMove(board,7).move_into_algebraic();
     //std::cout<<perft(board,4)<<std::endl;
     //perft_divide(board,depth);

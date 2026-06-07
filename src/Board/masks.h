@@ -1,7 +1,13 @@
 #pragma once
 #include <cstdint>
-extern uint64_t PASSED_MASK[2][64];
-// Files are whole continuous bytes in your architecture
+extern const uint64_t BLACK_AHEAD_MASK[64];
+extern const uint64_t WHITE_AHEAD_MASK[64];
+extern const uint64_t OUTER_2_SQ_RING_MASK[64];
+extern const uint64_t WHITE_PASSED_MASK[64];
+extern const uint64_t LEFT_RIGHT_COLUMN_MASK[64];
+extern const uint64_t WHITE_LEFT_MASK[64];
+extern const uint64_t BLACK_LEFT_MASK[64];
+extern const uint64_t BLACK_PASSED_MASK[64];
 // Ranks (Rows) are whole continuous bytes now
 constexpr uint64_t RANK_1 = 0x00000000000000FFULL; // Squares 0-7   (a1-h1)
 constexpr uint64_t RANK_2 = 0x000000000000FF00ULL; // Squares 8-15  (a2-h2)
@@ -44,35 +50,6 @@ inline constexpr int castle_rights_mask[64] ={
     15, 15, 15, 15, 15, 15, 15, 15,
     7, 15, 15, 15,  3, 15, 15, 11
 };
-
-
-inline void init_evaluation_masks() {
-
-    for (int sq = 0; sq < 64; ++sq) {
-        int file = sq % 8;
-        int rank = sq / 8;
-
-        // Loop through the entire board to find squares in front of 'sq'
-        for (int target_sq = 0; target_sq < 64; ++target_sq) {
-            int target_file = target_sq % 8;
-            int target_rank = target_sq / 8;
-
-            // Check if the target square is on the same file or adjacent files
-            if (std::abs(file - target_file) <= 1) {
-                
-                // White Passed Pawn Mask (Only ranks ABOVE the pawn)
-                if (target_rank > rank) {
-                    PASSED_MASK[WHITE][sq] |= (1ULL << target_sq);
-                }
-
-                // Black Passed Pawn Mask (Only ranks BELOW the pawn)
-                if (target_rank < rank) {
-                    PASSED_MASK[BLACK][sq] |= (1ULL << target_sq);
-                }
-            }
-        }
-    }
-}
 static const uint64_t rookmagics[64] = {
     0xA180022080400230ull, 0x0040100040022000ull, 0x0080088020001002ull, 0x0080080280841000ull,
     0x4200042010460008ull, 0x04800A0003040080ull, 0x0400110082041008ull, 0x008000A041000880ull,

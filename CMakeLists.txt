@@ -19,6 +19,8 @@ add_executable(
     src/movegen/attacks.cpp
     src/search/search.cpp
     src/evaluation/evaluation.cpp
+    src/board/masks.cpp
+    src/evaluation/quiescence.cpp
 )
 
 target_include_directories(
