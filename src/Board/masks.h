@@ -1,0 +1,112 @@
+#pragma once
+#include <cstdint>
+extern uint64_t PASSED_MASK[2][64];
+// Files are whole continuous bytes in your architecture
+// Ranks (Rows) are whole continuous bytes now
+constexpr uint64_t RANK_1 = 0x00000000000000FFULL; // Squares 0-7   (a1-h1)
+constexpr uint64_t RANK_2 = 0x000000000000FF00ULL; // Squares 8-15  (a2-h2)
+constexpr uint64_t RANK_3 = 0x0000000000FF0000ULL; // Squares 16-23 (a3-h3)
+constexpr uint64_t RANK_4 = 0x00000000FF000000ULL; // Squares 24-31 (a4-h4)
+constexpr uint64_t RANK_5 = 0x000000FF00000000ULL; // Squares 32-39 (a5-h5)
+constexpr uint64_t RANK_6 = 0x0000FF0000000000ULL; // Squares 40-47 (a6-h6)
+constexpr uint64_t RANK_7 = 0x00FF000000000000ULL; // Squares 48-55 (a7-h7)
+constexpr uint64_t RANK_8 = 0xFF00000000000000ULL; // Squares 56-63 (a8-h8)
+
+// Files (Columns) are periodic bits across all bytes
+constexpr uint64_t FILE_A = 0x0101010101010101ULL; // Bit 0 of every byte (a1, a2, a3...)
+constexpr uint64_t FILE_B = 0x0202020202020202ULL; // Bit 1 of every byte (b1, b2, b3...)
+constexpr uint64_t FILE_C = 0x0404040404040404ULL; // Bit 2 of every byte (c1, c2, c3...)
+constexpr uint64_t FILE_D = 0x0808080808080808ULL; // Bit 3 of every byte (d1, d2, d3...)
+constexpr uint64_t FILE_E = 0x1010101010101010ULL; // Bit 4 of every byte (e1, e2, e3...)
+constexpr uint64_t FILE_F = 0x2020202020202020ULL; // Bit 5 of every byte (f1, f2, f3...)
+constexpr uint64_t FILE_G = 0x4040404040404040ULL; // Bit 6 of every byte (g1, g2, g3...)
+constexpr uint64_t FILE_H = 0x8080808080808080ULL; // Bit 7 of every byte (h1, h2, h3...)
+
+// In masks.h
+inline constexpr uint64_t FILES[8] = {
+    0x0101010101010101ULL, // File A
+    0x0202020202020202ULL, // File B
+    0x0404040404040404ULL, // File C
+    0x0808080808080808ULL, // File D
+    0x1010101010101010ULL, // File E
+    0x2020202020202020ULL, // File F
+    0x4040404040404040ULL, // File G
+    0x8080808080808080ULL  // File H
+};
+inline constexpr uint64_t ROW[8] = {RANK_1,RANK_2,RANK_3,RANK_4,RANK_5,RANK_6,RANK_7,RANK_8};
+inline constexpr int castle_rights_mask[64] ={
+    13, 15, 15, 15, 12, 15, 15, 14,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    15, 15, 15, 15, 15, 15, 15, 15,
+    7, 15, 15, 15,  3, 15, 15, 11
+};
+
+
+inline void init_evaluation_masks() {
+
+    for (int sq = 0; sq < 64; ++sq) {
+        int file = sq % 8;
+        int rank = sq / 8;
+
+        // Loop through the entire board to find squares in front of 'sq'
+        for (int target_sq = 0; target_sq < 64; ++target_sq) {
+            int target_file = target_sq % 8;
+            int target_rank = target_sq / 8;
+
+            // Check if the target square is on the same file or adjacent files
+            if (std::abs(file - target_file) <= 1) {
+                
+                // White Passed Pawn Mask (Only ranks ABOVE the pawn)
+                if (target_rank > rank) {
+                    PASSED_MASK[WHITE][sq] |= (1ULL << target_sq);
+                }
+
+                // Black Passed Pawn Mask (Only ranks BELOW the pawn)
+                if (target_rank < rank) {
+                    PASSED_MASK[BLACK][sq] |= (1ULL << target_sq);
+                }
+            }
+        }
+    }
+}
+static const uint64_t rookmagics[64] = {
+    0xA180022080400230ull, 0x0040100040022000ull, 0x0080088020001002ull, 0x0080080280841000ull,
+    0x4200042010460008ull, 0x04800A0003040080ull, 0x0400110082041008ull, 0x008000A041000880ull,
+    0x10138001A080C010ull, 0x0000804008200480ull, 0x00010011012000C0ull, 0x0022004128102200ull,
+    0x000200081201200Cull, 0x202A001048460004ull, 0x0081000100420004ull, 0x4000800380004500ull,
+    0x0000208002904001ull, 0x0090004040026008ull, 0x0208808010002001ull, 0x2002020020704940ull,
+    0x8048010008110005ull, 0x6820808004002200ull, 0x0A80040008023011ull, 0x00B1460000811044ull,
+    0x4204400080008EA0ull, 0xB002400180200184ull, 0x2020200080100380ull, 0x0010080080100080ull,
+    0x2204080080800400ull, 0x0000A40080360080ull, 0x02040604002810B1ull, 0x008C218600004104ull,
+    0x8180004000402000ull, 0x488C402000401001ull, 0x4018A00080801004ull, 0x1230002105001008ull,
+    0x8904800800800400ull, 0x0042000C42003810ull, 0x008408110400B012ull, 0x0018086182000401ull,
+    0x2240088020C28000ull, 0x001001201040C004ull, 0x0A02008010420020ull, 0x0010003009010060ull,
+    0x0004008008008014ull, 0x0080020004008080ull, 0x0282020001008080ull, 0x50000181204A0004ull,
+    0x48FFFE99FECFAA00ull, 0x48FFFE99FECFAA00ull, 0x497FFFADFF9C2E00ull, 0x613FFFDDFFCE9200ull,
+    0xFFFFFFE9FFE7CE00ull, 0xFFFFFFF5FFF3E600ull, 0x0010301802830400ull, 0x510FFFF5F63C96A0ull,
+    0xEBFFFFB9FF9FC526ull, 0x61FFFEDDFEEDAEAEull, 0x53BFFFEDFFDEB1A2ull, 0x127FFFB9FFDFB5F6ull,
+    0x411FFFDDFFDBF4D6ull, 0x0801000804000603ull, 0x0003FFEF27EEBE74ull, 0x7645FFFECBFEA79Eull,
+};
+
+static const uint64_t bishopmagics[64] = {
+    0xFFEDF9FD7CFCFFFFull, 0xFC0962854A77F576ull, 0x5822022042000000ull, 0x2CA804A100200020ull,
+    0x0204042200000900ull, 0x2002121024000002ull, 0xFC0A66C64A7EF576ull, 0x7FFDFDFCBD79FFFFull,
+    0xFC0846A64A34FFF6ull, 0xFC087A874A3CF7F6ull, 0x1001080204002100ull, 0x1810080489021800ull,
+    0x0062040420010A00ull, 0x5028043004300020ull, 0xFC0864AE59B4FF76ull, 0x3C0860AF4B35FF76ull,
+    0x73C01AF56CF4CFFBull, 0x41A01CFAD64AAFFCull, 0x040C0422080A0598ull, 0x4228020082004050ull,
+    0x0200800400E00100ull, 0x020B001230021040ull, 0x7C0C028F5B34FF76ull, 0xFC0A028E5AB4DF76ull,
+    0x0020208050A42180ull, 0x001004804B280200ull, 0x2048020024040010ull, 0x0102C04004010200ull,
+    0x020408204C002010ull, 0x02411100020080C1ull, 0x102A008084042100ull, 0x0941030000A09846ull,
+    0x0244100800400200ull, 0x4000901010080696ull, 0x0000280404180020ull, 0x0800042008240100ull,
+    0x0220008400088020ull, 0x04020182000904C9ull, 0x0023010400020600ull, 0x0041040020110302ull,
+    0xDCEFD9B54BFCC09Full, 0xF95FFA765AFD602Bull, 0x1401210240484800ull, 0x0022244208010080ull,
+    0x1105040104000210ull, 0x2040088800C40081ull, 0x43FF9A5CF4CA0C01ull, 0x4BFFCD8E7C587601ull,
+    0xFC0FF2865334F576ull, 0xFC0BF6CE5924F576ull, 0x80000B0401040402ull, 0x0020004821880A00ull,
+    0x8200002022440100ull, 0x0009431801010068ull, 0xC3FFB7DC36CA8C89ull, 0xC3FF8A54F4CA2C89ull,
+    0xFFFFFCFCFD79EDFFull, 0xFC0863FCCB147576ull, 0x040C000022013020ull, 0x2000104000420600ull,
+    0x0400000260142410ull, 0x0800633408100500ull, 0xFC087E8E4BB2F736ull, 0x43FF9E4EF4CA2C89ull,
+};
