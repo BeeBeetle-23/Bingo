@@ -17,6 +17,8 @@ add_executable(
     src/movegen/movegen.cpp
     src/perft/perft.cpp
     src/movegen/attacks.cpp
+    src/search/search.cpp
+    src/evaluation/evaluation.cpp
 )
 
 target_include_directories(
