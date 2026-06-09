@@ -10,6 +10,10 @@ const char* arr[64] = {"a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1",
     "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8"};
 
 void Move::move_into_algebraic() const {
+    if(data == 0){
+        std::cout<<"0000";
+        return;
+    }
     std::cout<<arr[from()]<<arr[to()];
     MoveFlag f = flag();
     if(!(f == QUIET || f== DOUBLE_PAWN_PUSH || f == CAPTURE || f == KING_CASTLE ||

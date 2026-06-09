@@ -159,6 +159,9 @@ void Board::remove_piece(Piece piece, Square sq)
 void Board::add_piece(Piece piece, Square sq)
 {
     assert(piece >= 0 && piece <= 11 && "INVALID PIECE ID!");
+    if (piece >= 12 || piece < 0) {
+        return; 
+    }
     assert(piece_on[sq] == NO_PIECE);
     pieces[piece] = setBitOne(pieces[piece], sq);
     Colour c = get_piece_colour(piece);

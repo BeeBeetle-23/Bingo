@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <random>
+#include "board/zobrist.h"
 #include "board/board.h"
 namespace Zobrist {
 
@@ -32,4 +33,24 @@ namespace Zobrist {
         black_to_move= splitmix64(state);
     }
 
+}
+TTEntry *probe(uint64_t hash) {
+    TTEntry &entry = transposition_table[tt_index(hash)];
+
+    if (entry.valid && entry.hash == hash)
+        return &entry;
+
+    return nullptr;
+}
+void store(uint64_t hash, int score, int depth, TTflag flag, Move best_move, int ply) {
+    TTEntry &entry = transposition_table[tt_index(hash)];
+
+    if (!entry.valid || hash != entry.hash || depth >= entry.depth) {
+        entry.valid = true;
+        entry.hash = hash;
+        entry.depth = depth;
+        entry.flag = flag;
+        entry.best_move = best_move;
+        entry.score = score_to_tt(score, ply);
+    }
 }

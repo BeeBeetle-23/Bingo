@@ -21,6 +21,8 @@ add_executable(
     src/evaluation/evaluation.cpp
     src/board/masks.cpp
     src/evaluation/quiescence.cpp
+    src/uci/uci.cpp
+    src/time/time.cpp
 )
 
 target_include_directories(

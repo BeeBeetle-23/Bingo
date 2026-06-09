@@ -1,3 +1,4 @@
+#include "evaluation/quiescence.h"
 #include "Board/board.h"
 #include "evaluation/packing.h"
 #include "evaluation/evaluation.h"
@@ -67,7 +68,6 @@ const int32_t PSQT[6][64] = {
     },
 };
 
-
 const int32_t mobilities[5][28] = {
 
     {
@@ -87,9 +87,7 @@ const int32_t mobilities[5][28] = {
     },
 };
 
-
 const int32_t bishop_pair = S(19, 59);
-
 
 const int32_t passed_pawns[64] = {
     S(0, 0), S(0, 0), S(0, 0), S(0, 0), S(0, 0), S(0, 0), S(0, 0), S(0, 0),
@@ -106,16 +104,13 @@ const int32_t inner_king_zone_attacks[4] = {
     S(10, -6), S(18, -4), S(20, -7), S(13, 7),
 };
 
-
 const int32_t outer_king_zone_attacks[4] = {
     S(0, 1), S(0, 0), S(4, -4), S(2, 1),
 };
 
-
 const int32_t doubled_pawn_penalty[8] = {
     S(-7, -39), S(-4, -26), S(-11, -24), S(-10, -10), S(-9, -19), S(-12, -22), S(-5, -24), S(-14, -34),
 };
-
 
 const int32_t pawn_storm[64] = {
     S(0, 0), S(0, 0), S(0, 0), S(0, 0), S(0, 0), S(0, 0), S(0, 0), S(0, 0),
@@ -161,23 +156,45 @@ const int32_t threats[6][6] = {
     },
 };
 
-
 const int32_t rook_semi_open[2] = {
     S(22, 9), S(55, 4),
 };
 
-
 const int32_t phalanx_pawns[8] = {
     S(0, 0), S(-2, -7), S(-1, -3), S(18, 11), S(47, 39), S(128, 167), S(-129, 412), S(0, 0),
 };
-
 
 // For a tapered evaluation
 const int32_t game_phase_increment[6] = {
   0, 1, 1, 2, 4, 0
 };
 
-int evaluate(Board &board){
+void scoreMoves(const Board &board, ScoredMove moves,int count,Move pvmove,Move tt_move){
+    for(int i = 0; i<count; i++){
+        if(moves.move[i] == tt_move){
+            moves.score[i] = 15'000'000;
+        }
+        if(moves.move[i] == pvmove) {
+            moves.score[i] = 10'000'000;
+            continue;
+        }
+        const MoveFlag flag = moves.move[i].flag();
+        switch(flag){
+            case QUEEN_PROMO_CAPTURE: moves.score[i] = 9'000'000;break;
+            case ROOK_PROMO_CAPTURE: moves.score[i] = 8'000'000;break;
+            case BISHOP_PROMO_CAPTURE:
+            case KNIGHT_PROMO_CAPTURE:
+            case CAPTURE:{
+            moves.score[i] = 7'000'000 + getMVVLVA(board, moves.move[i]);break;}
+            case EP_CAPTURE: moves.score[i] = 7'000'000;break;
+            default: moves.score[i] = 0;break;
+        }
+    }
+}
+
+
+int evaluate(Board &board, EvalInfo *info = nullptr){
+    int32_t psqt[2] = {0,0};
     int32_t eval_array[2] = {0,0};
     int32_t phase = 0;
     u64 wp = board.pieces[WP];
@@ -203,18 +220,29 @@ int evaluate(Board &board){
     int32_t num_w_rooks_on_semi_op_file = 0;
     int32_t num_b_rooks_on_semi_op_file = 0;
     u64 squares = 0;
+    int32_t mob_arr[2] = {0,0}, kza_arr[2] = {0,0}, dp_arr[2] = {0,0};
+    int32_t pp_arr[2] = {0,0}, ip_arr[2] = {0,0}, ph_arr[2] = {0,0}, thr_arr[2] = {0,0};
+
     for(int i = 0; i<12; i++){
         u64 curr_bb = bitboard[i];
         while(curr_bb != 0){
             int32_t sq = pop_lsb(curr_bb);
             bool is_white = i < 6;
             int32_t j = is_white ? i : i-6;
-
+            int8_t side = (is_white)?0:1;
+            
             // Phase for tapered evaluation
             phase += game_phase_increment[j];
-            eval_array[is_white ? 0 : 1] += PSQT[j][is_white ? sq ^ 56 : sq];
+            
+            // --- FIXED: Combined redundant additions and populated psqt tracking array ---
+            int32_t psqt_packed_val = PSQT[j][is_white ? sq ^ 56 : sq];
+            eval_array[side] += psqt_packed_val;
+            psqt[side] += psqt_packed_val; 
+            // ------------------------------------------------------------------------------
+
             uint64_t attacks_bb = 0ull;
             u64 friendly = (is_white)?board.occupancies[WHITE]:board.occupancies[BLACK];
+            
             //Non Pawn Pieces
             if(j>0){
                 int attacks = 0;
@@ -256,33 +284,50 @@ int evaluate(Board &board){
                     default:
                         break;
                 }
-                eval_array[is_white? 0:1] += mobilities[j-1][attacks];
+                
+                // --- FIXED: Removed redundant second mobility addition ---
+                int32_t mob_score = mobilities[j-1][attacks];
+                eval_array[side] += mob_score;
+                if (info) mob_arr[side] += mob_score;
+                // ----------------------------------------------------------
+
                 if (j < 5){
-                    
                     // King zone attacks
-                    eval_array[is_white ? 0 : 1] += inner_king_zone_attacks[j-1]  * __builtin_popcountll((is_white ? black_king_inner_sq_mask : white_king_inner_sq_mask) & attacks_bb); 
-                    eval_array[is_white ? 0 : 1] += outer_king_zone_attacks[j-1]  * __builtin_popcountll((is_white ? black_king_2_sq_mask : white_king_2_sq_mask) & attacks_bb); 
+                    int32_t inner_hits = __builtin_popcountll((is_white ? black_king_inner_sq_mask : white_king_inner_sq_mask) & attacks_bb);
+                    int32_t outer_hits = __builtin_popcountll((is_white ? black_king_2_sq_mask : white_king_2_sq_mask) & attacks_bb);
+                    
+                    int32_t kza_score = (inner_king_zone_attacks[j-1] * inner_hits) + (outer_king_zone_attacks[j-1] * outer_hits);
+                    eval_array[side] += kza_score;
+                    if (info) kza_arr[side] += kza_score;
                 }
             }
             //Pawns
-            else{
-                //Doubled pawns
+            else { 
+                // Doubled pawns
                 uint64_t front_mask = is_white ? WHITE_AHEAD_MASK[sq] : BLACK_AHEAD_MASK[sq];
-                uint64_t our_pawn_bb = is_white ? wp:bp;
+                uint64_t our_pawn_bb = is_white ? wp : bp;
                 if (front_mask & our_pawn_bb){
-                    eval_array[is_white ? 0 : 1] += doubled_pawn_penalty[is_white ? 7 - sq % 8 : sq % 8];
+                    int32_t dp_penalty = doubled_pawn_penalty[is_white ? 7 - sq % 8 : sq % 8];
+                    eval_array[side] += dp_penalty;
+                    if (info) dp_arr[side] += dp_penalty;
                 }
-                //Passed pawns
-                if((is_white? (WHITE_PASSED_MASK[sq] & bp): (BLACK_PASSED_MASK[sq] & wp)) == 0){
-                    eval_array[is_white ? 0 : 1] += passed_pawns[is_white ? sq ^ 56 : sq];
+                // Passed pawns
+                if((is_white ? (WHITE_PASSED_MASK[sq] & bp) : (BLACK_PASSED_MASK[sq] & wp)) == 0){
+                    int32_t pp_bonus = passed_pawns[is_white ? sq ^ 56 : sq];
+                    eval_array[side] += pp_bonus;
+                    if (info) pp_arr[side] += pp_bonus;
                 }
                 // Isolated pawn
                 if ((LEFT_RIGHT_COLUMN_MASK[sq] & (is_white ? wp : bp)) == 0ull){
-                    eval_array[is_white ? 0 : 1] += isolated_pawns[is_white ? sq ^ 56 : sq];
+                    int32_t ip_penalty = isolated_pawns[is_white ? sq ^ 56 : sq];
+                    eval_array[side] += ip_penalty;
+                    if (info) ip_arr[side] += ip_penalty;
                 }
-                //Phalanx pawns
+                // Phalanx pawns
                 if (is_white ? (WHITE_LEFT_MASK[sq] & wp) : (BLACK_LEFT_MASK[sq] & bp)){
-                    eval_array[is_white ? 0 : 1] += phalanx_pawns[is_white ? sq / 8 : 7 - sq / 8];
+                    int32_t ph_bonus = phalanx_pawns[is_white ? sq / 8 : 7 - sq / 8];
+                    eval_array[side] += ph_bonus;
+                    if (info) ph_arr[side] += ph_bonus;
                 }
             }
             //Actual King Attacks
@@ -296,31 +341,56 @@ int evaluate(Board &board){
             int32_t num_queen_attacks = is_white ? __builtin_popcountll(attacks_bb & bq) : __builtin_popcountll(attacks_bb & wq);
             int32_t num_king_attacks = is_white ? __builtin_popcountll(attacks_bb & bk) : __builtin_popcountll(attacks_bb & wk);
 
-            eval_array[is_white ? 0 : 1] += threats[j][0] * num_pawn_attacks;
-            eval_array[is_white ? 0 : 1] += threats[j][1] * num_knight_attacks;
-            eval_array[is_white ? 0 : 1] += threats[j][2] * num_bishop_attacks;
-            eval_array[is_white ? 0 : 1] += threats[j][3] * num_rook_attacks;
-            eval_array[is_white ? 0 : 1] += threats[j][4] * num_queen_attacks;
-            eval_array[is_white ? 0 : 1] += threats[j][5] * num_king_attacks;
+            int32_t threat_score = (threats[j][0] * num_pawn_attacks) +
+                                  (threats[j][1] * num_knight_attacks) +
+                                  (threats[j][2] * num_bishop_attacks) +
+                                  (threats[j][3] * num_rook_attacks) +
+                                  (threats[j][4] * num_queen_attacks) +
+                                  (threats[j][5] * num_king_attacks);
+            eval_array[side] += threat_score;
+            if (info) thr_arr[side] += threat_score;
         }
     }
+    
+    // --- FIXED: Populated tracking arrays for global terms ---
+    int32_t bp_arr[2] = {0,0}, rso_arr[2] = {0,0};
+    
     //Bishop Pair
-    if (std::popcount(wb) == 2) eval_array[0] += bishop_pair; 
-    if (std::popcount(bb) == 2) eval_array[1] += bishop_pair; 
+    if (std::popcount(wb) == 2) { eval_array[0] += bishop_pair; bp_arr[0] += bishop_pair; }
+    if (std::popcount(bb) == 2) { eval_array[1] += bishop_pair; bp_arr[1] += bishop_pair; }
 
     // Rooks on semi-open files
-    if (num_w_rooks_on_semi_op_file == 1) eval_array[0] += rook_semi_open[0];
-    if (num_w_rooks_on_semi_op_file == 2) eval_array[0] += rook_semi_open[1];
-    if (num_b_rooks_on_semi_op_file == 1) eval_array[1] += rook_semi_open[0];
-    if (num_b_rooks_on_semi_op_file == 2) eval_array[1] += rook_semi_open[1];
+    if (num_w_rooks_on_semi_op_file == 1) { eval_array[0] += rook_semi_open[0]; rso_arr[0] += rook_semi_open[0]; }
+    if (num_w_rooks_on_semi_op_file == 2) { eval_array[0] += rook_semi_open[1]; rso_arr[0] += rook_semi_open[1]; }
+    if (num_b_rooks_on_semi_op_file == 1) { eval_array[1] += rook_semi_open[0]; rso_arr[1] += rook_semi_open[0]; }
+    if (num_b_rooks_on_semi_op_file == 2) { eval_array[1] += rook_semi_open[1]; rso_arr[1] += rook_semi_open[1]; }
+    // ----------------------------------------------------------
 
     int32_t stm = board.side_to_move == WHITE ? 0 : 1;
-    int32_t score = eval_array[stm] - eval_array[stm^1];
-    int32_t mg_score = (int32_t)unpack_mg(score);
-    int32_t eg_score = (int32_t)unpack_eg(score);
-    int32_t mg_phase = phase;
-    if (mg_phase > 24) mg_phase = 24;
-    int32_t eg_phase = 24 - mg_phase;
+    int32_t enemy = stm ^ 1;
 
-    return  ((mg_score * mg_phase + eg_score * eg_phase) / 24);
+    // Helper lambda to scale packed middle/end game values using your phase logic
+    auto scale_tapered = [&](int32_t packed_score) {
+        int32_t mg = (int32_t)unpack_mg(packed_score);
+        int32_t eg = (int32_t)unpack_eg(packed_score);
+        int32_t mg_p = phase > 24 ? 24 : phase;
+        return (mg * mg_p + eg * (24 - mg_p)) / 24;
+    };
+
+    // Map relative values (Us - Them)
+    if (info != nullptr) {
+        info->psqt              = scale_tapered(psqt[stm] - psqt[enemy]);
+        info->mobility          = scale_tapered(mob_arr[stm] - mob_arr[enemy]);
+        info->king_zone_attacks = scale_tapered(kza_arr[stm] - kza_arr[enemy]);
+        info->doubled_pawns     = scale_tapered(dp_arr[stm]  - dp_arr[enemy]);
+        info->passed_pawns      = scale_tapered(pp_arr[stm]  - pp_arr[enemy]);
+        info->isolated_pawns    = scale_tapered(ip_arr[stm]  - ip_arr[enemy]);
+        info->phalanx_pawns     = scale_tapered(ph_arr[stm]  - ph_arr[enemy]);
+        info->threats           = scale_tapered(thr_arr[stm] - thr_arr[enemy]);
+        info->bishop_pair       = scale_tapered(bp_arr[stm]  - bp_arr[enemy]);
+        info->rooks_semi        = scale_tapered(rso_arr[stm] - rso_arr[enemy]);
+    }
+
+    int32_t score = eval_array[stm] - eval_array[enemy];
+    return scale_tapered(score);
 }
