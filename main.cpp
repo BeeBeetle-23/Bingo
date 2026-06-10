@@ -5,15 +5,21 @@
 #include "perft/perft.h"
 #include "search/search.h"
 #include "uci/uci.h"
+#include "constants.h"
 #include "move/move.h"
+#include "time/time.h"
 int main(){
     initAttackTables();
     initMagicTables();
     Zobrist::init();
-    Board board;
-    //board.Parse_FEN("3Q4/5pk1/6p1/6P1/2N2r2/1P2R3/6B1/6K1 b - - 0 48");
-    //findBestMove(board,5).move_into_algebraic();
-    uci_loop(board);
-    //std::cout<<perft(board,depth)<<std::endl;
-    //perft_divide(board,5);
+    TimeManager::init_infinite();
+    Board board;int depth = 10;
+    board.Parse_FEN("8/8/pp2pk2/1p1p2p1/1P1P2Pp/P3P2P/3K4/8 w - - 0 1");
+    findBestMove(board,depth).move_into_algebraic();
+    printf("Nodes: %llu\n", TimeManager::nodes);
+    printf("Aborted: %d\n", TimeManager::search_aborted);
+    printf("Probes: %d\nHits: %d\nCuttoffs: %d\nUpper: %d\nLower: %d\n",probes,hits,cutoffs,upper,lower);
+    float hitrate = (100.0*hits)/probes; float cuttoffrate = (100.0*cutoffs)/probes;
+    printf("HitRate: %.2f\nCuttoffRate: %.2f\n",hitrate,cuttoffrate);
+    
 }

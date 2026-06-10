@@ -16,6 +16,8 @@ int pv_length[MAX_DEPTH];
 
 int negamax(Board &board, int depth, int alpha, int beta, int ply, bool is_pv) {
     TimeManager::nodes++;
+
+// Only check the actual system time every 2048 nodes
     TimeManager::check_time();
 
     if (TimeManager::search_aborted)
@@ -32,10 +34,13 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, bool is_pv) {
     Move best_move_this_node = Move();
 
     TTEntry *tt = probe(board.zobrist_hash);
+    probes++;
 
     if (tt) {
-        if (tt->best_move != Move())
+        hits++;
+        if (tt->best_move != Move()){
             tt_move = tt->best_move;
+        }
 
         // Do not allow TT cutoffs at root. Root move must come from generated legal moves.
         if (ply > 0 && tt->depth >= depth) {
@@ -43,19 +48,24 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, bool is_pv) {
 
             switch (tt->flag) {
                 case EXACT:
+                    cutoffs++;
                     return tt_score;
 
                 case LOWER_BOUND:
+                    lower++;
                     alpha = std::max(alpha, tt_score);
                     break;
 
                 case UPPER_BOUND:
+                    upper++;
                     beta = std::min(beta, tt_score);
                     break;
             }
 
-            if (alpha >= beta)
+            if (alpha >= beta){
+                cutoffs++;
                 return tt_score;
+            }
         }
     }
 
@@ -64,11 +74,15 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, bool is_pv) {
 
     ScoredMove move_list;
     int legalCount = 0;
+    //generateLegalMoves(board, move_list.move, board.side_to_move, &legalCount);
+    generateQueenMoves(board, move_list.move, board.side_to_move, &legalCount);
+    generateRookMoves(board, move_list.move, board.side_to_move, &legalCount);
+    generateBishopMoves(board, move_list.move, board.side_to_move, &legalCount);
+    generateKnightMoves(board, move_list.move, board.side_to_move, &legalCount);
+    generateKingMoves(board, move_list.move, board.side_to_move, &legalCount);
+    generatePawnMoves(board, move_list.move, board.side_to_move, &legalCount);
 
-    generateLegalMoves(board, move_list.move, board.side_to_move, &legalCount);
-
-    if (legalCount == 0)
-        return is_in_check(board) ? -MATE + ply : 0;
+    int real_legal_moves = 0;
 
     // Avoid using stale pv[ply][ply]. TT move is only used for ordering.
     scoreMoves(board, move_list, legalCount, Move(), tt_move);
@@ -91,6 +105,11 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, bool is_pv) {
 
         board.make_move(move);
 
+        if(board.isSquareAttacked(board.king_square[board.side_to_move^1],board.side_to_move)){
+            board.undo_move();
+            continue;
+        }
+        real_legal_moves++;
         bool child_is_pv = is_pv && is_first_move;
         int score = -negamax(board, depth - 1, -beta, -alpha, ply + 1, child_is_pv);
 
@@ -105,6 +124,7 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, bool is_pv) {
         }
 
         if (score >= beta) {
+            cutoffs++;
             store(board.zobrist_hash, score, depth, LOWER_BOUND, move, ply);
             return score;
         }
@@ -125,6 +145,9 @@ int negamax(Board &board, int depth, int alpha, int beta, int ply, bool is_pv) {
         }
 
         is_first_move = false;
+    }
+    if (real_legal_moves == 0) {
+        return is_in_check(board) ? (-MATE + ply) : 0;
     }
 
     if (TimeManager::search_aborted)
@@ -158,14 +181,13 @@ Move findBestMove(Board &board, int max_depth) {
 
     // Legal fallback, so timeout before depth 1 cannot return a1a1.
     Move best_move = root_moves.move[0];
-    int score = 0;
 
     max_depth = std::min(max_depth, MAX_DEPTH);
 
     for (int depth = 1; depth <= max_depth; depth++) {
         std::memset(pv_length, 0, sizeof(pv_length));
 
-        score = negamax(board, depth, -INF, INF, 0, true);
+        negamax(board, depth, -INF, INF, 0, true);
 
         if (TimeManager::search_aborted)
             break;
